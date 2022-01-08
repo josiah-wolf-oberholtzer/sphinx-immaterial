@@ -25,6 +25,8 @@ import { Observable, Subject } from "rxjs"
 
 import { translation } from "~/_"
 
+const promptRegex = /^>>> |^\.\.\. |^\$ |^In \[\d*\]: |^ {2,5}\.\.\.: |^ {5,8}: /;
+
 /* ----------------------------------------------------------------------------
  * Helper types
  * ------------------------------------------------------------------------- */
@@ -41,6 +43,27 @@ interface SetupOptions {
  * ------------------------------------------------------------------------- */
 
 /**
+ * Strip prompts
+ */
+function formatCopyText(textContent) {
+    const regexp = new RegExp('^(>>> |\\.\\.\\. |\\$ )(.*)')
+    if (textContent.match(regexp)) {
+        const outputLines = [];
+        for (const line of textContent.split('\n')) {
+            const match = line.match(regexp);
+            if (match) {
+                outputLines.push(match[2])
+            }
+        }
+        textContent = outputLines.join('\n');
+    }
+    if (textContent.endsWith("\n")) {
+        textContent = textContent.slice(0, -1)
+    }
+    return textContent
+}
+
+/**
  * Set up Clipboard.js integration
  *
  * @param options - Options
@@ -50,8 +73,13 @@ export function setupClipboardJS(
 ): void {
   if (ClipboardJS.isSupported()) {
     new Observable<ClipboardJS.Event>(subscriber => {
-      new ClipboardJS("[data-clipboard-target], [data-clipboard-text]")
-        .on("success", ev => subscriber.next(ev))
+      new ClipboardJS("[data-clipboard-target], [data-clipboard-text]", {
+        text: function(trigger) {
+          const target = document.querySelector(trigger.attributes["data-clipboard-target"].value);
+          return formatCopyText(target.innerText);
+        }
+      })
+      .on("success", ev => subscriber.next(ev))
     })
       .subscribe(() => alert$.next(translation("clipboard.copied")))
   }
